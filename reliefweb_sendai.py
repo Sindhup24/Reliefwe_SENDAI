@@ -1,15 +1,15 @@
 import requests
 import pandas as pd
 
-# Define the ReliefWeb API endpoint and parameters
-api_url = "https://api.reliefweb.int/v1/reports"
+# Define the new ReliefWeb API endpoint for disasters and parameters
+api_url = "https://api.reliefweb.int/v1/disasters?appname=rwint-user-0&profile=list&preset=latest&slim=1&query%5Bvalue%5D=Cyclone&query%5Boperator%5D=AND"
 params = {
     'appname': 'disaster-recovery-script',
-    'query[value]': 'disaster',
+    'query[value]': 'Tropical Cyclone',
     'filter[field]': 'country',
-    'filter[value]': 'Israel',  # Replace with the desired region
+    'filter[value]': 'Bangladesh',
     'sort': 'date:desc',
-    'limit': 30
+    'limit': 5
 }
 
 # Fetch the data from the ReliefWeb API
@@ -18,15 +18,15 @@ data = response.json()
 
 # Extract relevant data
 disaster_data = []
-for report in data['data']:
-    fields = report['fields']
+for disaster in data['data']:
+    fields = disaster['fields']
     disaster_info = {
-        'Title': fields.get('title'),
-        'Date': fields.get('date', {}).get('created'),
-        'Source': fields.get('source', [{}])[0].get('name'),
-        'Country': fields.get('country', [{}])[0].get('name'),
-        'Disaster_Type': fields.get('disaster_type', [{}])[0].get('name'),
-        'URL': fields.get('url')
+        'Title': fields.get('name', 'N/A'),
+        'Date': fields.get('date', {}).get('created', 'N/A'),
+        'Source': fields.get('source', [{'name': 'N/A'}])[0].get('name', 'N/A'),
+        'Country': fields.get('country', [{'name': 'N/A'}])[0].get('name', 'N/A'),
+        'Disaster_Type': fields.get('type', [{'name': 'N/A'}])[0].get('name', 'N/A'),
+        'URL': fields.get('url', 'N/A')
     }
     disaster_data.append(disaster_info)
 
@@ -62,12 +62,23 @@ def organize_by_sendai(df):
 
     return organized_data
 
+# Function to filter data by multiple countries
+def filter_by_countries(df, country_list):
+    return df[df['Country'].isin(country_list)]
+
 # Organize the data by SENDAI framework indicators
 sendai_data = organize_by_sendai(df)
 
 # Convert organized data to a DataFrame
 sendai_df = pd.DataFrame(sendai_data)
 
-# Print the organized data
+# Filter data for specific countries
+countries_to_filter = ['Bangladesh', 'Madagascar']  # Add more countries as needed
+filtered_df = filter_by_countries(df, countries_to_filter)
+
+# Print the organized data and filtered data
 print("\nOrganized Data by SENDAI Framework:")
 print(sendai_df)
+
+print("\nFiltered Data by Countries (Bangladesh, Madagascar):")
+print(filtered_df)
