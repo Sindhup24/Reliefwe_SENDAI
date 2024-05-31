@@ -1,41 +1,46 @@
 import requests
 import pandas as pd
 
-# Define the new ReliefWeb API endpoint for disasters and parameters
-api_url = "https://api.reliefweb.int/v1/disasters?appname=rwint-user-0&profile=list&preset=latest&slim=1&query%5Bvalue%5D=Cyclone&query%5Boperator%5D=AND"
-params = {
-    'appname': 'disaster-recovery-script',
-    'query[value]': 'Tropical Cyclone',
-    'filter[field]': 'country',
-    'filter[value]': 'Bangladesh',
-    'sort': 'date:desc',
-    'limit': 5
-}
-
-# Fetch the data from the ReliefWeb API
-response = requests.get(api_url, params=params)
-data = response.json()
-
-# Extract relevant data
-disaster_data = []
-for disaster in data['data']:
-    fields = disaster['fields']
-    disaster_info = {
-        'Title': fields.get('name', 'N/A'),
-        'Date': fields.get('date', {}).get('created', 'N/A'),
-        'Source': fields.get('source', [{'name': 'N/A'}])[0].get('name', 'N/A'),
-        'Country': fields.get('country', [{'name': 'N/A'}])[0].get('name', 'N/A'),
-        'Disaster_Type': fields.get('type', [{'name': 'N/A'}])[0].get('name', 'N/A'),
-        'URL': fields.get('url', 'N/A')
+# Function to fetch disaster data from the ReliefWeb API
+def fetch_disaster_data(disaster_type, country=None):
+    api_url = "https://api.reliefweb.int/v1/disasters?appname=rw-user-0&profile=list&preset=latest&slim=1&query%5Bvalue%5D=%28Cyclone%29+AND+%28country.id%3A119+AND+type.id%3A4611%29&query%5Boperator%5D=AND"
+    params = {
+        'appname': 'disaster-recovery-script',
+        'query[value]': disaster_type,
+        'query[operator]': 'AND',
+        'filter[field]': 'country' if country else None,
+        'filter[value]': country if country else None,
+        'sort': 'date:desc',
+        'limit': 4  # Increase limit to fetch more data
     }
-    disaster_data.append(disaster_info)
 
-# Convert the data to a DataFrame
-df = pd.DataFrame(disaster_data)
+    print(f"Fetching data for {disaster_type} in {country if country else 'all countries'}...")
+    response = requests.get(api_url, params={k: v for k, v in params.items() if v})
+    
+    if response.status_code != 200:
+        print(f"Failed to fetch data: {response.status_code} - {response.text}")
+        return pd.DataFrame()
 
-# Print the data
-print("Disaster Data:")
-print(df)
+    data = response.json()
+
+    if 'data' not in data or len(data['data']) == 0:
+        print(f"No data returned for {disaster_type} in {country if country else 'all countries'}.")
+        return pd.DataFrame()
+
+    disaster_data = []
+    for disaster in data['data']:
+        fields = disaster.get('fields', {})
+        disaster_info = {
+            'Title': fields.get('name', 'N/A'),
+            'Date': fields.get('date', {}).get('created', 'N/A'),
+            'Source': fields.get('source', [{'name': 'N/A'}])[0].get('name', 'N/A'),
+            'Country': fields.get('country', [{'name': 'N/A'}])[0].get('name', 'N/A'),
+            'Disaster_Type': fields.get('type', [{'name': 'N/A'}])[0].get('name', 'N/A'),
+            'URL': fields.get('url', 'N/A')
+        }
+        disaster_data.append(disaster_info)
+    
+    return pd.DataFrame(disaster_data)
 
 # Function to organize data using SENDAI framework indicators
 def organize_by_sendai(df):
@@ -60,25 +65,38 @@ def organize_by_sendai(df):
         organized_data['F-6'].append(row['URL'])
         organized_data['G-7'].append(row['Title'])
 
-    return organized_data
+    return pd.DataFrame(organized_data)
 
 # Function to filter data by multiple countries
 def filter_by_countries(df, country_list):
     return df[df['Country'].isin(country_list)]
 
-# Organize the data by SENDAI framework indicators
-sendai_data = organize_by_sendai(df)
+# Main function to fetch, process, and display data
+def main():
+    disaster_types = ['Cyclone', 'Earthquake', 'Flood']
+    country_list = ['Bangladesh', 'Madagascar']
 
-# Convert organized data to a DataFrame
-sendai_df = pd.DataFrame(sendai_data)
+    all_disaster_data = pd.DataFrame()
+    for disaster_type in disaster_types:
+        disaster_data = fetch_disaster_data(disaster_type)
+        if not disaster_data.empty:
+            all_disaster_data = pd.concat([all_disaster_data, disaster_data], ignore_index=True)
 
-# Filter data for specific countries
-countries_to_filter = ['Bangladesh', 'Madagascar']  # Add more countries as needed
-filtered_df = filter_by_countries(df, countries_to_filter)
+    if all_disaster_data.empty:
+        print("No disaster data found for the specified types.")
+        return
 
-# Print the organized data and filtered data
-print("\nOrganized Data by SENDAI Framework:")
-print(sendai_df)
+    sendai_data = organize_by_sendai(all_disaster_data)
+    filtered_data = filter_by_countries(all_disaster_data, country_list)
 
-print("\nFiltered Data by Countries (Bangladesh, Madagascar):")
-print(filtered_df)
+    print("All Disaster Data:")
+    print(all_disaster_data)
+    
+    print("\nOrganized Data by SENDAI Framework:")
+    print(sendai_data)
+
+    print("\nFiltered Data by Countries:")
+    print(filtered_data)
+
+# Uncomment the following line to run the main function when executing the script
+main()
